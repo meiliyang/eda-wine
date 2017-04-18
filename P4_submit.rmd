@@ -1,0 +1,591 @@
+Red Wine Quality Analysis by Meili
+========================================================
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+
+library(ggplot2)
+library(gridExtra)
+library(scales)
+library(psych)
+library(dplyr)
+library(reshape2)
+library(nnet)
+library(ggthemes)
+
+```
+
+
+```{r, Load_the_Data}
+# Load the Data
+#getwd()
+#setwd("/Users/meiliyang/Meili/udacity/projects/P4")
+rw<-read.csv("wineQualityReds.csv")
+str(rw)
+#The "X" column is row index column which doesn't contain information about wine. So I delete this column by setting it's values to NULL
+rw$X<-NULL
+summary(rw)
+```
+
+# Univariate Plots Section
+
+```{r, Univariate_Plots1}
+# Plot quality histogram
+qplot(data = rw, x=quality, binwidth=1)+
+  scale_x_continuous(breaks = seq(3,8,1))
+```
+
+Quality are integers ranges from 3 to 8. Most wines lay in the middle at 5 and 6. 
+
+```{r, Univariate_Plots2}
+# Histogram of other features
+ggplot(data = rw, aes(x=alcohol))+
+  geom_histogram(binwidth = 0.5)
+
+ggplot(data = rw, aes(x=pH))+
+  geom_histogram(bins=40)
+
+ggplot(data = rw, aes(x=density))+
+  geom_histogram(bins=40)
+```
+
+Alcohol distribution is skewed to the right, and the most wines are with around 9.5 alcohol. pH and density are mostly normally distributed around it's center.  
+
+```{r, Univariate_Plot3}
+# Residual sugar
+ggplot(data = rw, aes(x=residual.sugar))+
+  geom_histogram(binwidth = 0.5)
+
+ggplot(data = subset(rw, residual.sugar>0.9 & 
+                       residual.sugar<quantile(residual.sugar, probs = 0.9)),
+       aes(x=residual.sugar))+
+  geom_histogram(binwidth = 0.1)
+```
+
+Residual sugar in wines have outliers at high sugar range. Zoom in to 90% of data and the residual sugar is normally distributed at around 2.2.
+
+
+```{r, Univariate_Plots4}
+# Histogram of acids  
+volatile_acid_1<-ggplot(data = rw, aes(x=volatile.acidity))+
+  geom_histogram(bins = 50)
+
+volatile_acid_2<-ggplot(data = rw,aes(x=1,y=volatile.acidity))+
+  geom_jitter(position=position_jitter(height=0),alpha=0.2)+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.4)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')+
+  coord_flip()
+
+grid.arrange(volatile_acid_1,volatile_acid_2, ncol=1)
+
+fixed_acid_1<-ggplot(data = rw, aes(x=fixed.acidity))+
+  geom_histogram(bins = 50)
+
+fixed_acid_2<-ggplot(data = rw,aes(x=1,y=fixed.acidity))+
+  geom_jitter(position=position_jitter(height=0),alpha=0.2)+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.4)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')+
+  coord_flip()
+
+
+grid.arrange(fixed_acid_1, fixed_acid_2, ncol=1)
+
+rw$volatile_fixed_acid_ratio<-rw$volatile.acidity/(rw$fixed.acidity)
+ggplot(data = rw, aes(x=volatile_fixed_acid_ratio))+
+  geom_histogram(bins = 50)
+```
+
+Wines contain more fixed acid than volatile acid in general. Volatile acid distribution has two peaks at around 0.4 and 0.6. Voliatile acid and fixed acid could be related, so I created a new variable for ration between voliatile acid and fixed acid. The linear scale histogram of this ratio is similar to volatile acid distriution, and most ratio is between 0.02 to 0.1. 
+
+```{r, Univariate_plots5}
+# Citric acid
+citric.acid_1<-ggplot(data = rw, aes(x=citric.acid))+
+  geom_histogram(bins = 50)
+
+citric.acid_2<-ggplot(data = rw,aes(x=1,y=citric.acid))+
+  geom_jitter(position=position_jitter(height=0),alpha=0.2)+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.4)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')+
+  coord_flip()
+
+grid.arrange(citric.acid_1,citric.acid_2, ncol=1)
+
+rw$citric_fix_acid_ratio<-rw$citric.acid/rw$fixed.acidity
+ggplot(data = subset(rw,citric_fix_acid_ratio>0),
+       aes(x=citric_fix_acid_ratio))+
+  geom_histogram(bins = 50)
+```
+
+Citric acid gives a random distribution, and most wines citric acid is between 0 - 0.75. The most count occurs at 0. 
+
+```{r, Univariate_Plots6}
+# Histogram of sulfur.dioxide 
+sulfur.dioxide_1<-ggplot(data = rw, aes(x=free.sulfur.dioxide))+
+  geom_histogram(bins = 60)
+sulfur.dioxide_2<-ggplot(data = rw, aes(x=total.sulfur.dioxide))+
+  geom_histogram(bins = 60)
+grid.arrange(sulfur.dioxide_1, sulfur.dioxide_2, ncol=1)
+
+#sulfur.dioxide_3<-ggplot(data = rw, aes(x=free.sulfur.dioxide))+
+#  geom_histogram(bins = 60)+
+#  scale_x_log10()
+#sulfur.dioxide_4<-ggplot(data = rw, aes(x=total.sulfur.dioxide))+
+#  geom_histogram(bins = 60)+
+#  scale_x_log10()
+#grid.arrange(sulfur.dioxide_3, sulfur.dioxide_4, ncol=1)
+
+rw$free_total_sulfur_dioxide_ratio<-rw$free.sulfur.dioxide/rw$total.sulfur.dioxide
+ggplot(data = rw,aes(x=free_total_sulfur_dioxide_ratio))+
+  geom_histogram(bins = 50)
+```
+
+Free sulfer dioxide is lower than total sulfur dioxide. Free sulfur dioxide has a similar distribution with total sulfur dioxide, that both are like exponential decay. I create a new variable for free sulfur dioxide and total sulfur dioxide. The ratio has a normal distribution and most ratio is between 0.2 to 0.5.
+
+
+
+```{r, Univariate_Plots7}
+# Histogram of salts
+salt_1<-ggplot(data = rw, aes(x=chlorides))+
+  geom_histogram(bins = 50)
+salt_2<-ggplot(data = rw, aes(x=sulphates))+
+  geom_histogram(bins=50)
+grid.arrange(salt_1, salt_2, ncol=1)
+
+salt_3<-ggplot(data = subset(rw,
+                             chlorides<quantile(chlorides,0.95)), 
+               aes(x=chlorides))+
+  geom_histogram(bins = 30)
+
+salt_4<-ggplot(data = subset(rw, 
+                             sulphates<quantile(sulphates,0.95)), 
+               aes(x=sulphates))+
+  geom_histogram(bins=30)
+grid.arrange(salt_3, salt_4, ncol=1)
+
+```
+
+Chlorides and sulphates both show a normal distribution, with outliers and extrem at bigger values. Zoomed in graphs underneath show normal distribution for both salts.
+
+```{r, univariate_8}
+rw_long<-melt(rw)
+ggplot(data=rw_long, aes(x=variable, y=value))+
+  geom_boxplot()+
+  facet_wrap(~variable, scales = "free")
+
+```
+
+From above box plots of all variables, it shows that some variables have many outliers towards bigger values, such as chlorides, sulphates and residual sugar. Those values may affect the accuracy for bivariate and multivariate analysis. So I wrote a funcion to detect outliers which is beyond Q3+3*IQR for each columns, and remove the rows containing any outlier. The dataset is reduced to 1435 observations instead of 1599.
+
+```{r, data_preprocessing}
+remove_outliers2 <- function(x, limit = 3) {
+    Q3 <- quantile(x, 0.75)
+    out <- limit * IQR(x, 0.75)
+    x > (Q3 + out)
+}
+rw.sorted <- data.frame(apply(rw,2,remove_outliers2))
+outlier_row_index<-c()
+
+for (i in 1:1600){
+  if(sum(rw.sorted[i, ]==TRUE,na.rm=T)>=1){
+   outlier_row_index<-c(outlier_row_index,i) 
+  }
+  next
+}
+rw_remove_outlier<-rw[-outlier_row_index, ]
+
+
+rw_long_1<-melt(rw_remove_outlier)
+ggplot(data=rw_long_1, aes(x=variable, y=value))+
+  geom_boxplot()+
+  facet_wrap(~variable, scales = "free")+
+  ggtitle("after removing outliers")
+
+```
+
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+There are 1599 wines with 10 features (fixed.acidity, volatile.acidity, citric.acid, residual.sugar,chlorides,free.sulfur.dioxide,total.sulfur.dioxide,density,pH,sulphates,alcohol,quality)
+
+Quanlity are integers range from 3 to 8. Most wines have quality of 5 or 6. pH and density are normally distributed. Free sulfur dioxide has a similar distribution with total sulfur dioxide. Sugar, chlorides and sulphates have extrems at high values, and show a normal distribution at concentrated part. 
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The main feature is quality, and other features can be directly related with quality such as alcohol, pH, sugar, density, and sulfur dioxide.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+The rest features have an effect on the key features. For example, fixed acidity, volatile acidity and citric acid can effect pH value. Sulphates and chlorides may relate with density. 
+
+### Did you create any new variables from existing variables in the dataset?
+
+Yes, I creatd three new variables for ratio between fixed and volatil acid, ratio between free and total sulfur dioxide, and ratio between citric acid and fixed acid.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+There are a few variables having outliers at bigger values. So I removed the rows with any outlier detected, and ending with 1435 observations.
+
+# Bivariate Plots Section
+
+```{r, Bivariate_Plots1,fig.height=32, fig.width=50}
+
+pairs.panels(rw_remove_outlier)
+
+```
+
+Summary of pairs scatter plots:
+* positive relationship exclude derived parameters: fixed.acidity vs citric.acid, fixed.acidity vs density, quality vs alcohol, free.sulfur.dioxide vs total.sulfur.dioxide.
+* negative relationship exclude derived parameters: fixed.acidity vs pH, citric.acid vs pH, density vs pH.
+* derived parameters ratio between fixed.acidity and volatile.acidity, and ratio between fixed acidity and citric.acid show a better correlation with quality
+* some interesting patterns for alcohol vs other parameters, for example alcohol vs density. They have a strong negative correlation at the first part of data, then the trend goes flat. This is similar for alcohol vs chloride.
+
+First, I want to study how each variable is distrbuted by qualites.
+
+```{r, Bivariate_plots2}
+# Box plot for quality vs other key features
+rw_remove_outlier$fquality<-as.factor(rw_remove_outlier$quality)
+rw_remove_outlier_short<-as.data.frame(
+  rw_remove_outlier[,-which(names(rw_remove_outlier) == "quality")])
+
+rw_quality_long<-melt(rw_remove_outlier_short,id.vars = "fquality")
+
+ggplot(data = rw_quality_long, aes(fquality,value))+
+  geom_boxplot()+
+  facet_wrap(~variable,scales = "free")+
+  xlab("Quality")
+
+```
+
+From the box chart, I can see that volatile.acidity, citric.acid, density, pH, sulphates, alcohol, ratio between fixed.acidity and volatile.acidity, and ratio between citric acid and fixed acid have varied distribution at different qualities. 
+
+
+```{r, Bivariate_plots4}
+# Detailed plot analysis for quality
+# Quality vs alcohol
+ggplot(rw_remove_outlier, aes(x=fquality, y=alcohol)) + 
+  geom_jitter(position=position_jitter(height=0))+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.7)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')
+
+ggplot(data = rw_remove_outlier,
+                  aes(x=alcohol,  colour=fquality))+
+  geom_density()+
+  scale_color_brewer(palette = "YlOrBr") + 
+  theme_solarized(light = FALSE)
+
+```
+
+Most of wines with low quality below 5 have alcohol around or below 10. High alcohol wines with alcohol above 11 are measured as high quality. The density plot also shows the center of density migrates from low to high with quality from low to high. Alcohol should be an import factor for wine quality.
+
+```{r, Bivariate_plots6}
+# Density vs other variables
+ggplot(rw_remove_outlier, aes(x=fquality, y=density)) + 
+  geom_jitter(position=position_jitter(height=0))+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.7)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')
+
+density_2<-ggplot(data=rw_remove_outlier,aes(y=alcohol,x=density))+
+  geom_jitter(position=position_jitter(height=0))+
+  geom_smooth(span=0.1)
+
+density_1<-ggplot(data = rw_remove_outlier, aes(y=quality, x=density))+
+  geom_jitter(position=position_jitter(height=0))+
+  geom_smooth(span=0.1)
+grid.arrange(density_1, density_2, ncol=1)
+```
+
+Density also has a relatively strong coorelation with quality. Its relationship is similar to the trend between density and alcohol. Since alcohol is positively correlated with quality, so the effect of density on quality is not sure of an effect of alcohol on quality or its own. 
+
+```{r,Bivariate_plots7}
+# Quality vs volatile.acidity
+ggplot(rw_remove_outlier, aes(x=fquality, y=volatile.acidity)) + 
+  geom_jitter(position=position_jitter(height=0))+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.7)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')
+
+sumplot_1<-ggplot(data = rw_remove_outlier,aes(x=volatile.acidity, 
+                                    colour=fquality))+
+  geom_density()+  
+  scale_color_brewer(palette = "Reds")+
+  theme_solarized(light = FALSE)
+sumplot_1
+```
+
+For wines with qulity greater than 6, most are in low range of volatile.acidity. So volatile.acidity is another important variable related with quality. The density plot also shows the center migrates toward lower value for volatile.acidity when quality increases.
+
+```{r,Bivariate_plots8}
+# Volatile.acidity vs other variables
+ggplot(data=rw_remove_outlier,aes(x=citric.acid,y=volatile.acidity))+
+  geom_point()+
+  geom_smooth()
+
+
+```
+
+It's intersting to see the negative relationship between volatile acidity and citric acid. 
+
+```{r, Bivariate_plots9}
+# Citric Acid vs quality
+
+ggplot(rw_remove_outlier, aes(x=fquality, y=citric.acid)) + 
+  geom_jitter(position=position_jitter(height=0))+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.7)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')
+
+ggplot(data = rw_remove_outlier,aes(x=citric.acid,  
+                                    colour=fquality))+
+  geom_density()+
+  scale_color_brewer(palette = "Oranges")+
+  theme_solarized(light = FALSE)
+
+```
+
+Ciric acid over all has a wide distribution across quality. The mean or median value of citric acid increases with quality from low to high. The density plot shows the height of peak at 0.1 decreases, and the height of peak at 0.5 increases, from low quality to high quality.
+
+```{r,Bivariate_plots10 }
+#Citric Acid vs other variables
+ggplot(data=rw_remove_outlier,aes(x=citric.acid,y=fixed.acidity))+
+  geom_point()+
+  geom_smooth()
+
+```
+
+The most correlated variable with citric.acid is fixed acidity.
+
+```{r,Bivariate_plots11}
+# Quality vs sulphates
+ggplot(rw_remove_outlier, aes(x=fquality, y=sulphates)) + 
+  geom_jitter(position=position_jitter(height=0))+
+  geom_boxplot(col="blue",outlier.shape=NA, alpha=0.7)+
+  stat_summary(fun.y=mean,shape=8,col='red',geom='point')
+
+ggplot(data = rw_remove_outlier,aes(x=sulphates,  
+                                    colour=fquality))+
+  geom_density()+
+  scale_color_brewer(palette = "OrRd")+
+  theme_solarized(light = FALSE)
+
+```
+
+Sulphates also show varied distribution across quality. The width of density are almost the same for each quality, however the center migrates toward higher value from low to high quality.
+
+```{r,Bivariate_plots12}
+#Sulphates vs other variables
+ggplot(data=rw_remove_outlier,aes(x=sulphates,y=volatile.acidity))+
+  geom_point()+
+  geom_smooth()
+
+```
+
+Sulphates is coorelated with volatile.acidity, and the slope changes across data which will be mentioned later in the multivariate plot session.
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+I calculated correlation between each pair of variables, and further investigate the realtionship between quality and all rest variables. The variables having a linear and postitive relationship with quality are citric acid, ration between citric acid and fixed acid, sulphates, alcohol. The variables having a negative linear relationship with quality are volatile acidity, residual sugar, chloride, density, pH and volatile fixed acid ratio. 
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+Yes, the derived parameters calculating ratios seem to have a strong correlation with related variables. Besides, fixed acidity has a strong correlation with citric acid, density and pH, and total sulfur dioxide has strong correlation with free sulfur dioxide.
+
+### What was the strongest relationship you found?
+
+The strongest relationship I found is between citric acid and ratio of citric acid with fixed acid. The correlation is calculated as 0.94.
+
+
+# Multivariate Plots Section
+
+```{r,Multivariate_Plots1}
+sumplot_3<-ggplot(data=rw_remove_outlier, aes(x=sulphates, y=volatile.acidity,color=fquality)) +
+  geom_point(alpha=.5)+
+  geom_smooth(se = FALSE,method = "lm")+
+  scale_color_brewer(palette = "PuBuGn")+
+  theme_dark()
+sumplot_3
+```
+
+Plot sulphates vs volatile.acidity with quality as color shows high quality gathers on the right bottom along horizontal direction, and low quality gathers on the left side where sulphates are low, and vertical direction.
+
+In order to understand the pattern clearly, I divide the dataset into 3 intervals based on quality values: high quality (quality within 7 and 8), middle quality (quality within 5 and 6), and low quality (quality within 3 and 4).
+
+```{r, Multivariate_Plots2}
+
+rw_remove_outlier$quality.cut <- cut(rw_remove_outlier$quality, 
+                                     breaks=c(3,4,6,8), include.lowest=TRUE)
+multi_variable_1<-ggplot(data=rw_remove_outlier, 
+                         aes(x=alcohol, y=citric_fix_acid_ratio)) +
+    geom_point(alpha=.5, aes(color=quality.cut)) +
+    scale_color_brewer(palette = "Accent")+
+    xlab("Alcohol") +
+    ylab("Citric to fixed acid ratio")+
+  theme_dark()
+
+multi_variable_2<-ggplot(data=rw_remove_outlier, aes(x=volatile.acidity, y=pH)) +
+    geom_jitter(alpha=.5, aes(color=quality.cut)) +
+    scale_color_brewer(palette = "Accent")+
+    xlab("Volatile acidity") +
+    ylab("pH")+
+  theme_dark()
+
+grid.arrange(multi_variable_1, multi_variable_2, ncol=1)
+
+
+```
+
+Above plots show two opposite distribution of quality clusters with different variables. The top plot shows that high quality wines usually have higher alcohol than middle quality wines, and among high quality wines, more wines would have higher citric acid to fixed acid ratio. However on the bottom plot, high quality wines tend to have lower volatile acid, and low pH, and low quality wines tend to have high volatile acid and high pH. 
+
+```{r, Multivariate_Plots3}
+#Alcohol vs density
+sum_plot_2<-ggplot(data = rw_remove_outlier,aes(x=alcohol,y=density))+
+  geom_point()+
+  geom_smooth(method = "lm")+
+  facet_wrap(~fquality, scales = "free")
+sum_plot_2
+```
+
+Density is the most coorelated variable with alcohol. Alcohol vs density shows varied covariance at different quality. When quality goes from low to high, the coorelation goes steeper. 
+
+
+
+```{r, Multivariate_analysis}
+#Mutiple regression analysis
+#Linear regression
+fit1<-lm(quality ~ fixed.acidity+volatile_fixed_acid_ratio+citric_fix_acid_ratio+residual.sugar+chlorides+free.sulfur.dioxide+total.sulfur.dioxide+density+pH+sulphates+alcohol,data=rw_remove_outlier)
+print("Result for linear regression")
+summary(fit1)
+#Polynomial regression
+fit2<-lm(quality~ poly(fixed.acidity,2)+volatile_fixed_acid_ratio+
+           citric_fix_acid_ratio+residual.sugar+chlorides+
+           poly(free.sulfur.dioxide,2)+total.sulfur.dioxide+density+
+           pH+sulphates+alcohol,data=rw_remove_outlier)
+print("Result for polynomial regression")
+summary(fit2)
+```
+
+For regression analysis, I use entire dataset to fit with two models. For citric acid and volatile acid, I use the derived parameter ratio with fixed acid instead. The adjust R-square value using a linear regression model is 0.382, while using a polynomial regression model the adjust r-squre is 0.384. There might be better models than regression for this dataset. Since the wine quality can also be treated as categorical data, so I use logistic regression to analyze in below.
+
+```{r, Multivariate_analysis_2}
+#Multinomial logistic regression using 6 quality as individal category.
+indexes = sample(1:nrow(rw_remove_outlier), size=0.5*nrow(rw_remove_outlier))
+RWTrain <- rw_remove_outlier[indexes,]
+RWTest <- rw_remove_outlier[-indexes,]
+mod <- multinom(fquality ~ fixed.acidity+volatile_fixed_acid_ratio+
+                  citric_fix_acid_ratio+residual.sugar+
+                  chlorides+free.sulfur.dioxide+total.sulfur.dioxide+
+                  density+pH+sulphates+alcohol,data=RWTrain)
+
+
+test_predict<-as.data.frame(predict(mod,RWTest,"probs"))
+str(test_predict)
+test_predict$predict_quality<-2+apply(test_predict[, 1:6], 1, which.max)
+predict_result<-cbind(ture_quality=RWTest$fquality,test_predict)
+n=0
+i=1
+for (i in 1:nrow(predict_result)){
+  if (predict_result[i,1]==predict_result[i,8]){
+    n=n+1
+  }
+  next
+}
+accuracy_rate<-n/nrow(predict_result)
+print(paste("Accuracy using 6 individual quality is", accuracy_rate))
+#Multinomial logistic regression using every two quality as category.
+mod_2<- multinom(quality.cut ~ fixed.acidity+volatile_fixed_acid_ratio+citric_fix_acid_ratio+residual.sugar+
+                   chlorides+free.sulfur.dioxide+total.sulfur.dioxide+
+                   density+pH+sulphates+alcohol,data=RWTrain)
+
+
+test_predict<-as.data.frame(predict(mod_2,RWTest,"probs"))
+str(test_predict)
+test_predict$predict_quality_index<-apply(test_predict[, 1:3], 1, which.max)
+test_predict$predict_quality<-colnames(test_predict)[test_predict$predict_quality_index]
+predict_result<-cbind(ture_quality=RWTest$quality.cut,test_predict)
+n=0
+i=1
+for (i in 1:nrow(predict_result)){
+  if (predict_result[i,1]==predict_result[i,6]){
+    n=n+1
+  }
+  next
+}
+accuracy_rate<-n/nrow(predict_result)
+print(paste("Accuracy using combined quality is", accuracy_rate))
+
+```
+
+In above multinomial logistic regression, I randomly cut the data into half, and train the model using one half, and calculate accuracy using the other half. When using 6 quality individualy as category, the quality is around 61% for the testing dataset. In the multivariate plot session, if divide quality into three intervels it can separate quality intervals. So I ran multinomial logistic regression again but using quality intervals as category. Then the accuracy increases to 87% for the same testing dataset.  
+
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+I found in the multivariate plots that alcohol and citric acid to fixed acid ratio together stengthened each other when changing quality positively. Similarly, volatile acid and pH together strengthened each other for the negative relationship with quality.
+
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+I tried linear regression, polynomial regression and multinomial logistic regression. I found that linear regression and polynomial regression are relatively limited when predicting wine quality since the R-square values for both models are around 0.38. When using logistic regression, the accuracy increased from 61% to 87% when dividing 6 qualities into 3. So for predicting wine quality, I would trust logistic regression model better than linear or polynomial regression, and the result would be more accurate if to predict by 3 intervals instead of 6 individual quality.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+
+```{r, Plot_One}
+sumplot_1+
+  labs(x = "Volatile Acidity(g/dm^3)", y="Density")+
+  ggtitle("Density plot for volatile.acidity at each wine quality")
+```
+
+### Description One
+
+I use density plot to check how the distribution peaks migrates for each level of quality. For example for volatile.acidity, it clears shows the center of peaks migrate to the left and peak height increases from low quality to high quality. 
+
+### Plot Two
+
+```{r, Plot_Two}
+sum_plot_2+
+  ggtitle("Linear correlation between density and alcohol at each level of quality")+
+  labs(x = "Alcohol(% by volume)", y="Density(g/cm^3)")
+```
+
+### Description Two
+
+The linear correlationship can be varied for different quality wines. For example the slope between alcohol and density changes from vertical to horizontal from high quality to low quality.
+
+### Plot Three
+
+```{r, Plot_Three}
+sumplot_3+
+  ggtitle("Volatile.acidity vs sulphates distribution across all quality levels")+
+  labs(x = "Sulphates(g/dm^3)", y="Volatile Acidity(g/dm^3)")
+```
+
+
+### Description Three
+
+The last summary graph plots sulphates vs volatile.acidity with quality as color, showing high quality gathers on the right bottom along horizontal direction, and low quality gathers on the left side where sulphates are low, and vertical direction.
+
+------
+
+# Reflection
+
+The red wine data contains 1599 observations of  13 variables. I created three additional variables using possiblely related variables. Quality is the most interested feature to investigate. The data contains many outliers and extrems for a few variables, so I deleted the outliers above Q3+1.5*IQR, resulting a more concentrated data with 1435 observations. And I use linear regression, polynomial regression and logistic regression to fit reduced dataset. Overall, multinomial logistic regression gives a better accuracy when predicting quality by three levels. 
+
+During the project I was able to use EDA skills to understand the variance of one, two or three variables, and their correlations. One future work is to plot residual from fitting of two variables, against a third variable, to understand when which variable is the dominate one or both are.  
+
+There are some limits of this analysis. Firstly, comparing to wine qualities between 5 and 6 there are much less wine qulities lay 3-4 and 7-8, which may affect the accuracy of the analysis. Secondly, I include all the variables for regression analysis. The model could be improved if removing less relative variables. Thirdly, the outliers are removed so dataset is reduced. It could also affect on the accuracy when building prediction models. Last but not least, it may help to better predict wine quality if other varialbles were given, such as tester's informations like years of testing, or grape type etc.  
+
